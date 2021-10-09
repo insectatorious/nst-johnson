@@ -1,0 +1,6 @@
+tensorflow
+tensorflow_addons
+ipython
+tqdm
+wandb
+pillow
