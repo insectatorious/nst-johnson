@@ -19,6 +19,7 @@ class ResidualBlock(tf.keras.layers.Layer):
                norm_type: str = "batch",
                final_relu: bool = True,
                **kwargs):
+    # TODO: Replace this ugly hack 👇 with an Enum
     if norm_type not in ["batch", "instance"]:
       raise AttributeError(f"Expected 'norm_type' to be one of 'batch' or "
                            f"'instance'. Got '{norm_type}")
