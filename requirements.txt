@@ -1,5 +1,6 @@
 tensorflow
 tensorflow_addons
+tensorflow_datasets
 ipython
 tqdm
 wandb
