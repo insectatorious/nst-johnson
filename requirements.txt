@@ -4,3 +4,4 @@ ipython
 tqdm
 wandb
 pillow
+tf2onnx
