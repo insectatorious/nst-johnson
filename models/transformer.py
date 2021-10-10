@@ -77,36 +77,6 @@ class ResidualBlock(tf.keras.layers.Layer):
 
     return config
 
-#
-# class UpsampleConv(tf.keras.layers.Layer):
-#   """Nearest-neighbour up-sampling followed by a convolution.
-#
-#   Appears to give better results than learned up-sampling aka transposed conv.
-#   Initially proposed on distill pub: http://distill.pub/2016/deconv-checkerboard/#
-#   """
-#
-#   def __init__(self,
-#                out_channels: int,
-#                kernel_size: Optional[int, Tuple[int, int]],
-#                stride: Optional[int, Tuple[int, int]],
-#                **kwargs):
-#     super(UpsampleConv, self).__init__(**kwargs)
-#     self.upsampling_factor = stride
-#     self.out_channels = out_channels
-#     self.kernel_size = kernel_size
-#     self.conv2d = None
-#
-#   def build(self, input_shape: List) -> None:
-#     self.conv2d = Conv2D(filters=self.out_channels,
-#                          kernel_size=self.kernel_size,
-#                          strides=self.upsampling_factor)
-#
-#   def call(self, inputs: Tensor) -> Tensor:
-#     if self.upsampling_factor > 1:
-#       pass
-#
-#     return self.conv2d(inputs)
-
 
 class Transformer(tf.keras.Model):
 
