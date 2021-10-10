@@ -97,3 +97,21 @@ def total_variation_loss(x, img_ncols, img_nrows, l2: bool = True):
     x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, :img_nrows - 1, 1:, :])
 
   return tf.reduce_sum(tf.pow(a + b, 1.25))
+
+
+def get_training_strategy(config):
+  try:
+    tpu = tf.distribute.cluster_resolver.TPUClusterResolver()  # TPU detection
+  except ValueError:  # If TPU not found
+    tpu = None
+  if tpu:
+    tf.config.experimental_connect_to_cluster(tpu)
+    # This is the TPU initialization code that has to be at the beginning.
+    tf.tpu.experimental.initialize_tpu_system(tpu)
+    strategy = tf.distribute.TPUStrategy(tpu)
+    config["tpu"] = True
+  else:
+    strategy = tf.distribute.get_strategy()
+    print("Not running on TPU...")
+    config["tpu"] = False
+  return strategy
