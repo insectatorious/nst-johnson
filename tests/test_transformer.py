@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.losses import MeanSquaredError
 
-from models.transformer import ResidualBlock
+from models.transformer import ResidualBlock, Transformer
 
 
 class TestResidualBlock(tf.test.TestCase):
@@ -50,7 +50,6 @@ class TestResidualBlock(tf.test.TestCase):
 
     self.assertAllClose(inputs[:0], model.predict(inputs[:0]))
 
-
   @pytest.mark.skip("Will add later. May not be needed.")
   def test_mnist_classify(self):
     model = tf.keras.models.Sequential([
@@ -58,3 +57,19 @@ class TestResidualBlock(tf.test.TestCase):
       ResidualBlock(),
 
     ])
+
+
+class TestTransformer(tf.test.TestCase):
+  def setUp(self):
+    self.mscoco_shape = (224, 224, 3)
+
+  def test_output_shape_is_mscoco(self):
+    inputs = tf.random.uniform([1, *self.mscoco_shape])
+    model: tf.keras.Model = Transformer()
+
+    model.build(input_shape=(None, *self.mscoco_shape))
+    model.call(tf.keras.layers.Input(shape=self.mscoco_shape))
+
+    y = model.predict(inputs)
+    self.assertShapeEqual(y, inputs)
+
