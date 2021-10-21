@@ -63,6 +63,7 @@ def deprocess_image(x, img_nrows, img_ncols, add_offset: bool = True):
 def get_pbar(total: int = 100):
   return tqdm(total=total, leave=False, ascii=True)
 
+
 """## Compute the style transfer loss
 
 First, we need to define 4 utility functions:
@@ -73,6 +74,8 @@ First, we need to define 4 utility functions:
 generated image close to that of the base image
 - The `total_variation_loss` function, a regularization loss which keeps the generated image locally-coherent
 """
+
+
 # The gram matrix of an image tensor (feature-wise outer product)
 
 
@@ -103,6 +106,7 @@ def batch_gram_matrix(x, normalise: bool = True):
 # feature maps from the style reference image
 # and from the generated image
 
+
 def style_loss(style, combination, img_ncols, img_nrows):
   S = gram_matrix(style)
   C = gram_matrix(combination)
@@ -118,6 +122,7 @@ def style_loss(style, combination, img_ncols, img_nrows):
 
 def content_loss(base, combination):
   return tf.reduce_sum(tf.square(combination - base))
+
 
 # The 3rd loss function, total variation loss,
 # designed to keep the generated image locally coherent
