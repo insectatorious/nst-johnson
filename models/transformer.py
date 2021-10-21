@@ -13,6 +13,75 @@ from tensorflow.keras.layers import (
 from tensorflow_addons.layers import InstanceNormalization
 
 
+class SimpleResidualBlock(tf.keras.layers.Layer):
+
+  def __init__(self,
+               num_of_filters: int = 16,
+               norm_type: str = "batch",
+               final_relu: bool = True,
+               **kwargs):
+    # TODO: Replace this ugly hack 👇 with an Enum
+    if norm_type not in ["batch", "instance"]:
+      raise AttributeError(f"Expected 'norm_type' to be one of 'batch' or "
+                           f"'instance'. Got '{norm_type}")
+
+    super(SimpleResidualBlock, self).__init__(**kwargs)
+    self.num_of_filters = num_of_filters
+    self.norm_type = norm_type
+    self.final_relu = final_relu
+
+    self.conv_1 = None
+    self.norm_1 = None
+    self.conv_2 = None
+    self.norm_2 = None
+    self.relu_1 = None
+    if self.final_relu:
+      self.relu_2 = None
+
+  def build(self, input_shape: List) -> None:
+    self.conv_1 = Conv2D(filters=self.num_of_filters,
+                         kernel_size=3,
+                         strides=1,
+                         padding="same",
+                         input_shape=input_shape)
+
+    if self.norm_type == "batch":
+      self.norm_1 = BatchNormalization()
+    else:
+      self.norm_1 = InstanceNormalization()
+    self.relu_1 = LeakyReLU()
+    self.conv_2 = Conv2D(filters=self.num_of_filters,
+                         kernel_size=3,
+                         strides=1,
+                         padding="same")
+    if self.norm_type == "batch":
+      self.norm_2 = BatchNormalization()
+    else:
+      self.norm_2 = InstanceNormalization()
+    if self.final_relu:
+      self.relu_2 = LeakyReLU()
+
+  def call(self, inputs: Tensor) -> Tensor:
+    layer = self.conv_1(inputs)
+    layer = self.norm_1(layer)
+    layer = self.relu_1(layer)
+    layer = self.conv_2(layer)
+    layer = self.norm_2(layer)
+    layer = layer + inputs
+    if self.final_relu:
+      layer = self.relu_2(layer)
+
+    return layer
+
+  def get_config(self) -> Dict:
+    config = super(SimpleResidualBlock, self).get_config()
+    config.update({"num_of_filters": self.num_of_filters,
+                   "norm_type": self.norm_type,
+                   "final_relu": self.final_relu})
+
+    return config
+
+
 class ResidualBlock(tf.keras.layers.Layer):
 
   def __init__(self,
