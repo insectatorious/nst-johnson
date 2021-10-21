@@ -6,6 +6,7 @@ from tensorflow.keras.layers import (
   Conv2D,
   UpSampling2D,
   BatchNormalization,
+  ZeroPadding2D,
   LeakyReLU,
   Add
 )
@@ -81,11 +82,14 @@ class ResidualBlock(tf.keras.layers.Layer):
 
 class Transformer(tf.keras.Model):
 
-  def __init__(self, **kwargs) -> tf.keras.Model:
+  def __init__(self, pad_input: bool = True, **kwargs) -> tf.keras.Model:
     super(Transformer, self).__init__(**kwargs)
     self.num_of_channels = [3, 32, 64, 128]
     self.kernel_sizes = [9, 3, 3]
     self.stride_sizes = [1, 2, 2]
+    self.pad_input = pad_input
+    if self.pad_input:
+      self.pad_1 = ZeroPadding2D(2)
     self.conv1 = Conv2D(self.num_of_channels[1],
                         kernel_size=self.kernel_sizes[0],
                         padding="same",
@@ -99,7 +103,7 @@ class Transformer(tf.keras.Model):
     self.instance_norm_2 = InstanceNormalization()
     self.relu_2 = LeakyReLU()
     self.conv3 = Conv2D(self.num_of_channels[3],
-                        padding="same",
+                        padding="valid" if self.pad_input else "same",
                         kernel_size=self.kernel_sizes[2],
                         strides=self.stride_sizes[2])
     self.instance_norm_3 = InstanceNormalization()
@@ -138,7 +142,8 @@ class Transformer(tf.keras.Model):
                         padding="same")
 
   def call(self, inputs: Tensor) -> Tensor:
-    x = self.relu_1(self.instance_norm_1(self.conv1(inputs)))
+    x = self.pad_1(inputs) if self.pad_input else inputs
+    x = self.relu_1(self.instance_norm_1(self.conv1(x)))
     x = self.relu_2(self.instance_norm_2(self.conv2(x)))
     x = self.relu_3(self.instance_norm_3(self.conv3(x)))
 
@@ -152,3 +157,9 @@ class Transformer(tf.keras.Model):
     x = self.conv5(self.relu_5(self.instance_norm_5(self.upsample_2(x))))
 
     return self.conv6(x)
+
+  def get_config(self) -> Dict:
+    config = super(Transformer, self).get_config()
+    config.update({"pad_input": self.pad_input})
+
+    return config
