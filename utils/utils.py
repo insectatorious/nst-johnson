@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
+from tensorflow import keras, Tensor
 from tensorflow.keras.applications import vgg19
 from tqdm import tqdm
 
@@ -25,16 +25,37 @@ def preprocess_image(image_path, img_nrows, img_ncols):
   return tf.convert_to_tensor(img)
 
 
-def deprocess_image(x, img_nrows, img_ncols):
+def preprocess_img_tensor(img_batch, img_nrows, img_ncols) -> Tensor:
+  # tf.expand_dims(img_batch, a)
+  # No need to expand dims as img_batch is a list of images
+  img_batch = tf.image.resize(img_batch, (img_nrows, img_ncols))
+
+  return vgg19.preprocess_input(img_batch)
+
+
+def deprocess_image(x, img_nrows, img_ncols, add_offset: bool = True):
   # Util function to convert a tensor into a valid image
-  x = x.reshape((img_nrows, img_ncols, 3))
-  # Remove zero-center by mean pixel
-  x[:, :, 0] += 103.939
-  x[:, :, 1] += 116.779
-  x[:, :, 2] += 123.68
-  # 'BGR'->'RGB'
-  x = x[:, :, ::-1]
-  x = np.clip(x, 0, 255).astype('uint8')
+  if isinstance(x, tf.Tensor):
+    x = tf.reshape(x, (-1, img_nrows, img_ncols, 3))
+
+    if add_offset:
+      x = x + tf.constant([103.939, 116.779, 123.68])
+
+    # 'BGR'->'RGB'
+    x = x[:, :, :, ::-1]
+
+    x = tf.clip_by_value(x, 0, 255)
+    x = tf.cast(x, dtype=tf.uint8)
+
+  else:
+    x = x.reshape((img_nrows, img_ncols, 3))
+    # Remove zero-center by mean pixel
+    x[:, :, 0] += 103.939
+    x[:, :, 1] += 116.779
+    x[:, :, 2] += 123.68
+    # 'BGR'->'RGB'
+    x = x[:, :, ::-1]
+    x = np.clip(x, 0, 255).astype('uint8')
 
   return x
 
@@ -59,6 +80,19 @@ def gram_matrix(x):
   x = tf.transpose(x, (2, 0, 1))
   features = tf.reshape(x, (tf.shape(x)[0], -1))
   gram = tf.matmul(features, tf.transpose(features))
+
+  return gram
+
+
+def batch_gram_matrix(x, normalise: bool = True):
+  x = tf.transpose(x, (0, 3, 1, 2))
+  (b, h, w, ch) = x.shape.as_list()
+  features = tf.reshape(x, (b, ch, h * w))
+  # gram = tf.matmul(features, tf.transpose(features))
+  gram = tf.linalg.matmul(a=features, b=features, transpose_b=True)
+  gram = tf.reduce_mean(gram, axis=0)
+  gram = tf.expand_dims(gram, axis=0)
+  gram = gram / (ch * h * w) if normalise else gram
 
   return gram
 
