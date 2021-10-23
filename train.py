@@ -16,6 +16,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Optimizer, Adam, SGD
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.utils import image_dataset_from_directory
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 from models.perceptual_loss import get_model
 from utils.utils import (
@@ -27,7 +28,7 @@ from utils.utils import (
   batch_gram_matrix,
   deprocess_image
 )
-from models.transformer import Transformer
+from models.transformer import get_transformer
 
 
 def content_loss(content_batch_feature_maps,
@@ -160,12 +161,16 @@ def train(config) -> Model:
                     step=0,
                     description="Hyperparameters for this run")
 
-    transformer: Model = Transformer()
+    transformer: Model = get_transformer()
     perceptual_loss: Model = get_model(config["style_layer_names"],
-                                       config["content_layer_names"])
+                                       config["content_layer_names"],
+                                       img_ncols=config["img_ncols"],
+                                       img_nrows=config["img_nrows"])
 
-    transformer.build(input_shape=(None, config["img_nrows"], config["img_ncols"], 3))
-    transformer.call(tf.keras.layers.Input(shape=(config["img_nrows"], config["img_ncols"], 3)))
+    # transformer.build(input_shape=(None, None, None, 3))
+    # transformer.compile(optimizer=optimiser)
+    # transformer.build(input_shape=(None, config["img_nrows"], config["img_ncols"], 3))
+    # transformer.call(tf.keras.layers.Input(shape=(config["img_nrows"], config["img_ncols"], 3)))
     transformer.summary()
 
     # perceptual_loss.summary()
@@ -197,10 +202,6 @@ def train(config) -> Model:
       content_batch = preprocess_img_tensor(batch,
                                             config["img_nrows"],
                                             config["img_ncols"])
-      if config["rotate_content"]:
-        tfa.image.rotate(images=content_batch,
-                         angles=np.random.uniform(-5, 5,
-                                                  size=content_batch.shape[0]))
       # loss = distributed_train_step(strategy,
       #                               transformer,
       #                               perceptual_loss,
@@ -267,7 +268,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > 50000:
+      if i > 10000:
         break
 
     return transformer
@@ -293,17 +294,17 @@ if __name__ == '__main__':
                       type=float,
                       help="Weight factor for content loss. Higher values mean "
                            "more of the original image will be kept.",
-                      default=1e0)
+                      default=2e-1)
   parser.add_argument("--style_weight",
                       type=float,
                       help="Weight factor for style loss. Higher values mean "
                            "more of the style image will be kept.",
-                      default=1e0)
+                      default=2e2)
   parser.add_argument("--tv_weight",
                       type=float,
                       help="Weight factor for total variation loss. Affects "
                            "sharpness vs smoothness of the resulting image.",
-                      default=0e0)  # 1e9)
+                      default=1e-7)  # 1e9)
   parser.add_argument("--patience",
                       type=int,
                       help="Number of steps without any improvement.",
@@ -312,6 +313,9 @@ if __name__ == '__main__':
                       type=str,
                       help="Path to MS COCO dataset",
                       default=join(dirname(__file__), "data"))
+  parser.add_argument("--fixed_imgs",
+                      action="store_true",
+                      help="If True (default: False) then augment content images")
   args: Namespace = parser.parse_args()
 
   assert exists(args.style_img_name), \
@@ -334,28 +338,46 @@ if __name__ == '__main__':
 
   logging.debug(f"Creating {model_root_path}")
   makedirs(model_root_path, exist_ok=True)
+  model_name: str = basename(args.style_img_name).split(".")[0]
 
-  checkpoints_path: str = join(checkpoints_root_path,
-                               basename(args.style_img_name).split(".")[0])
+  checkpoints_path: str = join(checkpoints_root_path, model_name)
   makedirs(checkpoints_path, exist_ok=True)
-
   # Dimensions of the generated picture.
   width, height = get_img_dimensions(args.style_img_name)
 
   # TODO: 👇 Make this a script parameter
-  img_nrows = 224
+  img_nrows = 500
 
-  dataset = image_dataset_from_directory(
-    directory=args.dataset_path,
-    labels=None,
-    label_mode=None,
-    color_mode="rgb",
-    batch_size=2,
-    image_size=(224, 224),
-    shuffle=False,
+  if args.fixed_imgs:
+    dataset = image_dataset_from_directory(
+      directory=args.dataset_path,
+      labels=None,
+      label_mode=None,
+      color_mode="rgb",
+      batch_size=2,
+      image_size=(img_nrows, img_nrows),
+      shuffle=False,
 
-  )
-  # dataset = dataset.map(normalise).repeat()
+    )
+  else:
+    dataset = ImageDataGenerator(
+      rotation_range=20,
+      horizontal_flip=True,
+      vertical_flip=False,
+      fill_mode="reflect",
+      width_shift_range=0.05,
+      height_shift_range=0.05,
+      # brightness_range=(-0.002, 0.002),
+      zoom_range=0.15,
+      shear_range=0.15
+    ).flow_from_directory(
+      directory=join(args.dataset_path, "mscoco", "datasets"),
+      class_mode=None,
+      target_size=(img_nrows, img_nrows),
+      shuffle=False,
+      batch_size=2,
+      color_mode="rgb"
+    )
 
   logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
   # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
@@ -363,7 +385,7 @@ if __name__ == '__main__':
 
   config = dict(
     style_img_path=args.style_img_name,
-    # result_prefix="tabitha_viii_cc",
+
     # Weights of the different loss components
     total_variation_weight=args.tv_weight,
     style_weight=args.style_weight,
@@ -379,7 +401,6 @@ if __name__ == '__main__':
     min_improvement=0.1,
     initial_learning_rate=0.0001,
     optimiser="adam",
-    lr_decay_steps=2500,
 
     # List of layers to use for the style loss.
     style_layer_names=[
@@ -389,13 +410,17 @@ if __name__ == '__main__':
     ],
 
     # List of layers to use for the content loss.
-    content_layer_names=["block5_conv2", "block5_conv3"],
+    content_layer_names=["block5_conv2",
+                         # "block5_conv3"
+                         ],
     dataset=dataset,
     tf_writer=writer,
 
     # Data augmentation
-    rotate_content=True
+    augment_content=args.fixed_imgs
 
   )
 
   transformer: Model = train(config)
+  transformer.save(join(model_root_path, model_name))
+  logging.info(f"Saved {model_name} at {model_root_path}")

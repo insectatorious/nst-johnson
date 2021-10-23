@@ -151,14 +151,12 @@ class ResidualBlock(tf.keras.layers.Layer):
 
 class Transformer(tf.keras.Model):
 
-  def __init__(self, pad_input: bool = True, **kwargs) -> tf.keras.Model:
+  def __init__(self, **kwargs) -> tf.keras.Model:
     super(Transformer, self).__init__(**kwargs)
     self.num_of_channels = [3, 32, 64, 128]
     self.kernel_sizes = [9, 3, 3]
     self.stride_sizes = [1, 2, 2]
-    self.pad_input = pad_input
-    if self.pad_input:
-      self.pad_1 = ZeroPadding2D(2)
+    self.pad_1 = ZeroPadding2D(2, input_shape=(None, None, None, 3))
     self.conv1 = Conv2D(self.num_of_channels[1],
                         kernel_size=self.kernel_sizes[0],
                         padding="same",
@@ -172,7 +170,7 @@ class Transformer(tf.keras.Model):
     self.instance_norm_2 = InstanceNormalization()
     self.relu_2 = LeakyReLU()
     self.conv3 = Conv2D(self.num_of_channels[3],
-                        padding="valid" if self.pad_input else "same",
+                        padding="valid",
                         kernel_size=self.kernel_sizes[2],
                         strides=self.stride_sizes[2])
     self.instance_norm_3 = InstanceNormalization()
@@ -211,7 +209,7 @@ class Transformer(tf.keras.Model):
                         padding="same")
 
   def call(self, inputs: Tensor) -> Tensor:
-    x = self.pad_1(inputs) if self.pad_input else inputs
+    x = self.pad_1(inputs)
     x = self.relu_1(self.instance_norm_1(self.conv1(x)))
     x = self.relu_2(self.instance_norm_2(self.conv2(x)))
     x = self.relu_3(self.instance_norm_3(self.conv3(x)))
@@ -227,8 +225,64 @@ class Transformer(tf.keras.Model):
 
     return self.conv6(x)
 
-  def get_config(self) -> Dict:
-    config = super(Transformer, self).get_config()
-    config.update({"pad_input": self.pad_input})
 
-    return config
+def get_transformer(num_of_channels=None,
+                    kernel_sizes=None,
+                    stride_sizes=None) -> tf.keras.Model:
+  if num_of_channels is None:
+    num_of_channels = [3, 32, 64, 128]
+  if kernel_sizes is None:
+    kernel_sizes = [9, 3, 3]
+  if stride_sizes is None:
+    stride_sizes = [1, 2, 2]
+
+  input_layer = tf.keras.Input(shape=(None, None, 3), name="input_img")
+  x = ZeroPadding2D(2)(input_layer)
+  x = Conv2D(num_of_channels[1],
+             kernel_size=kernel_sizes[0],
+             padding="same",
+             strides=stride_sizes[0])(x)
+  x = InstanceNormalization()(x)
+  x = LeakyReLU()(x)
+  x = Conv2D(num_of_channels[2],
+             kernel_size=kernel_sizes[1],
+             padding="same",
+             strides=stride_sizes[1])(x)
+  x = InstanceNormalization()(x)
+  x = LeakyReLU()(x)
+  x = Conv2D(num_of_channels[3],
+             kernel_size=kernel_sizes[2],
+             padding="valid",
+             strides=stride_sizes[2])(x)
+  x = InstanceNormalization()(x)
+  x = LeakyReLU()(x)
+
+  residual_block_filters = 128
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+
+  x = UpSampling2D(size=stride_sizes[-1],
+                   interpolation="nearest")(x)
+  x = InstanceNormalization()(x)
+  x = LeakyReLU()(x)
+  x = Conv2D(num_of_channels[-2],
+             kernel_size=kernel_sizes[-1],
+             padding="same")(x)
+
+  x = UpSampling2D(size=stride_sizes[-2],
+                   interpolation="nearest")(x)
+  x = InstanceNormalization()(x)
+  x = LeakyReLU()(x)
+  x = Conv2D(num_of_channels[-3],
+             kernel_size=kernel_sizes[-2],
+             padding="same")(x)
+  x = Conv2D(num_of_channels[-4],
+             kernel_size=kernel_sizes[-3],
+             strides=stride_sizes[-3],
+             padding="same")(x)
+
+  return tf.keras.Model(input_layer, x, name="style_model")
