@@ -7,6 +7,7 @@ from tensorflow.keras.layers import (
   UpSampling2D,
   BatchNormalization,
   ZeroPadding2D,
+  SpatialDropout2D,
   LeakyReLU,
   Add
 )
@@ -228,7 +229,8 @@ class Transformer(tf.keras.Model):
 
 def get_transformer(num_of_channels=None,
                     kernel_sizes=None,
-                    stride_sizes=None) -> tf.keras.Model:
+                    stride_sizes=None,
+                    dropout_rate: int = 0.2) -> tf.keras.Model:
   if num_of_channels is None:
     num_of_channels = [3, 32, 64, 128]
   if kernel_sizes is None:
@@ -242,31 +244,32 @@ def get_transformer(num_of_channels=None,
              kernel_size=kernel_sizes[0],
              padding="same",
              strides=stride_sizes[0])(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
   x = LeakyReLU()(x)
   x = Conv2D(num_of_channels[2],
              kernel_size=kernel_sizes[1],
              padding="same",
              strides=stride_sizes[1])(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
   x = LeakyReLU()(x)
   x = Conv2D(num_of_channels[3],
              kernel_size=kernel_sizes[2],
              padding="valid",
              strides=stride_sizes[2])(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
   x = LeakyReLU()(x)
 
   residual_block_filters = 128
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
-  x = ResidualBlock(residual_block_filters, "instance", False)(x)
+  for _ in range(5):
+    x = ResidualBlock(residual_block_filters, "instance", True)(x)
+    x = SpatialDropout2D(dropout_rate)(x)
 
   x = UpSampling2D(size=stride_sizes[-1],
                    interpolation="nearest")(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
   x = LeakyReLU()(x)
   x = Conv2D(num_of_channels[-2],
@@ -275,14 +278,17 @@ def get_transformer(num_of_channels=None,
 
   x = UpSampling2D(size=stride_sizes[-2],
                    interpolation="nearest")(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
   x = LeakyReLU()(x)
   x = Conv2D(num_of_channels[-3],
              kernel_size=kernel_sizes[-2],
              padding="same")(x)
+  x = SpatialDropout2D(dropout_rate)(x)
   x = Conv2D(num_of_channels[-4],
              kernel_size=kernel_sizes[-3],
              strides=stride_sizes[-3],
              padding="same")(x)
+  x = SpatialDropout2D(dropout_rate)(x)
 
   return tf.keras.Model(input_layer, x, name="style_model")
