@@ -9,12 +9,10 @@ from time import time
 
 import numpy as np
 import tensorflow as tf
-import tensorflow_addons as tfa
+import tensorflow_probability as tfp
 from tqdm import tqdm
-from tensorflow import Tensor
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Optimizer, Adam, SGD
-from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.utils import image_dataset_from_directory
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
@@ -26,51 +24,10 @@ from utils.utils import (
   preprocess_img_tensor,
   get_pbar,
   batch_gram_matrix,
-  deprocess_image
+  deprocess_image,
+  compute_losses
 )
 from models.transformer import get_transformer
-
-
-def content_loss(content_batch_feature_maps,
-                 stylised_batch_feature_maps,
-                 content_layer_names) -> Tensor:
-  loss = tf.zeros(shape=())
-  for content_layer in content_layer_names:
-    target_content_representation = content_batch_feature_maps[content_layer]
-    current_content_representation = stylised_batch_feature_maps[content_layer]
-    loss += MeanSquaredError()(target_content_representation,
-                               current_content_representation)
-
-  loss /= len(content_layer_names)
-
-  return loss
-
-
-def style_loss(target_style_representation,
-               stylised_batch_feature_maps,
-               style_layer_names,
-               channels: int = 3) -> Tensor:
-  loss = tf.zeros(shape=())
-  current_style_representation = [batch_gram_matrix(stylised_batch_feature_maps[x],
-                                                    normalise=True)
-                                  for x in stylised_batch_feature_maps
-                                  if x in style_layer_names]
-  for gram_gt, gram_hat in zip(target_style_representation,
-                               current_style_representation):
-    # loss += MeanSquaredError()(gram_gt, gram_hat)
-    S, C = gram_gt, gram_hat
-    # print("@@@@@", gram_gt.shape)
-    size = gram_gt.shape[1] * gram_gt.shape[2]
-    loss += tf.reduce_sum(tf.square(S - C)) / (4.0 * (channels ** 2) * (size ** 2))
-
-  loss /= len(target_style_representation)
-
-  return loss
-
-
-def total_variation_loss(stylised_batch):
-  # Small change 👇 to reduce_sum instead of mean
-  return tf.reduce_mean(tf.image.total_variation(stylised_batch))
 
 
 @tf.function
@@ -92,27 +49,32 @@ def train_batch(transformer: Model,
     content_batch_feature_maps = perceptual_loss(content_batch)
     stylised_batch_feature_maps = perceptual_loss(stylised_batch)
 
-    # Step 3: Calculate content representations and content loss
-    batch_content_loss = content_weight * content_loss(content_batch_feature_maps,
-                                                       stylised_batch_feature_maps,
-                                                       content_layer_names)
+    (batch_content_loss,
+     batch_style_loss,
+     batch_total_variation_loss) = compute_losses(
+      stylised_batch=stylised_batch,
+      target_style_representation=target_style_representation,
+      content_feature_maps=[content_batch_feature_maps[x]
+                            for x in content_batch_feature_maps
+                            if x in content_layer_names],
+      stylised_content_feature_maps=[stylised_batch_feature_maps[x]
+                                     for x in stylised_batch_feature_maps
+                                     if x in content_layer_names],
+      stylised_style_feature_maps=[stylised_batch_feature_maps[x]
+                                   for x in stylised_batch_feature_maps
+                                   if x in style_layer_names]
+    )
 
-    # Step 4: Calculate style representations and style loss
-    batch_style_loss = style_weight * style_loss(target_style_representation,
-                                                 stylised_batch_feature_maps,
-                                                 style_layer_names)
-
-    # Step 5: Calculate total variation loss
-    batch_total_variation_loss = (total_variation_weight *
-                                  total_variation_loss(stylised_batch))
-
-    # Step 6: Combine losses
-    loss = batch_content_loss + batch_style_loss + batch_total_variation_loss
+    loss = content_weight * batch_content_loss
+    loss += style_weight * batch_style_loss
+    loss += total_variation_weight * batch_total_variation_loss
 
   grads = tape.gradient(loss, transformer.trainable_weights)
   optimiser.apply_gradients(zip(grads, transformer.trainable_weights))
 
-  return (batch_content_loss, batch_style_loss, batch_total_variation_loss), grads
+  return (batch_content_loss * content_weight,
+          batch_style_loss * style_weight,
+          batch_total_variation_loss * total_variation_weight), grads, stylised_batch
 
 
 # @tf.function
@@ -127,7 +89,7 @@ def train_batch(transformer: Model,
 #                            total_variation_weight,
 #                            content_layer_names,
 #                            style_layer_names):
-#   per_replica_losses, _ = strategy.run(train_batch,
+#   per_replica_losses, _, _ = strategy.run(train_batch,
 #                                        args=(transformer,
 #                                              perceptual_loss,
 #                                              optimiser,
@@ -147,19 +109,29 @@ def train_batch(transformer: Model,
 def train(config) -> Model:
   strategy = get_training_strategy(config)
 
-  with strategy.scope(), config["tf_writer"].as_default():
+  with strategy.scope():
 
     if config["optimiser"] == "adam":
-      optimiser = Adam(learning_rate=config["initial_learning_rate"])
+      optimiser = Adam(learning_rate=config["initial_learning_rate"],
+                       beta_1=0.7,
+                       beta_2=0.7,
+                       clipnorm=1.7)
     else:
-      optimiser = SGD(learning_rate=config["initial_learning_rate"],
-                      # momentum=0.7,
-                      # nesterov=True,
-                      clipnorm=None)
+      lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=config["initial_learning_rate"],
+        decay_steps=1000,
+        decay_rate=0.9,
+        staircase=False
+      )
+      optimiser = SGD(learning_rate=lr_schedule,
+                      momentum=0.5,
+                      nesterov=True,
+                      clipnorm=5.0)
 
-    tf.summary.text("Config", tf.constant(pprint.pformat(config)),
-                    step=0,
-                    description="Hyperparameters for this run")
+    with config["tf_writer"].as_default():
+      tf.summary.text("Config", tf.constant(pprint.pformat(config)),
+                      step=0,
+                      description="Hyperparameters for this run")
 
     transformer: Model = get_transformer()
     perceptual_loss: Model = get_model(config["style_layer_names"],
@@ -173,18 +145,21 @@ def train(config) -> Model:
     # transformer.call(tf.keras.layers.Input(shape=(config["img_nrows"], config["img_ncols"], 3)))
     transformer.summary()
 
+    # with config["tf_writer"].as_default():
+    #   tf.summary.graph(transformer.get_g)
     # perceptual_loss.summary()
 
     style_image = preprocess_image(image_path=config["style_img_path"],
                                    img_nrows=config["img_nrows"],
                                    img_ncols=config["img_ncols"])
-    tf.summary.image("style_image",
-                     deprocess_image(style_image,
-                                     config["img_nrows"],
-                                     config["img_ncols"]),
-                     step=0,
-                     max_outputs=1,
-                     description="Style to be learned.")
+    with config["img_writer"].as_default():
+      tf.summary.image("style_image",
+                       deprocess_image(style_image,
+                                       config["img_nrows"],
+                                       config["img_ncols"]),
+                       step=0,
+                       max_outputs=1,
+                       description="Style to be learned.")
     style_image_feature_maps = perceptual_loss(style_image)
     target_style_representation = [batch_gram_matrix(style_image_feature_maps[x])
                                    for x in style_image_feature_maps
@@ -215,7 +190,7 @@ def train(config) -> Model:
       #                               config["style_layer_names"])
       (batch_content_loss,
        batch_style_loss,
-       batch_total_variation_loss), grads = train_batch(
+       batch_total_variation_loss), grads, stylised_batch = train_batch(
         transformer,
         perceptual_loss,
         optimiser,
@@ -229,9 +204,30 @@ def train(config) -> Model:
 
       if i % 10 == 0:
         # https://stackoverflow.com/a/56961915
-        tf.summary.scalar(name="content_loss", data=batch_content_loss, step=i + 1)
-        tf.summary.scalar(name="style_loss", data=batch_style_loss, step=i + 1)
-        tf.summary.scalar(name="tv_loss", data=batch_total_variation_loss, step=i + 1)
+
+        with config["metric_writers"]["min"].as_default():
+          tf.summary.scalar(name="stylised_batch/metrics",
+                            data=tf.reduce_min(stylised_batch),
+                            step=i + 1)
+        with config["metric_writers"]["max"].as_default():
+          tf.summary.scalar(name="stylised_batch/metrics",
+                            data=tf.reduce_max(stylised_batch),
+                            step=i + 1)
+        with config["metric_writers"]["mean"].as_default():
+          tf.summary.scalar(name="stylised_batch/metrics",
+                            data=tf.reduce_mean(stylised_batch),
+                            step=i + 1)
+        with config["metric_writers"]["median"].as_default():
+          tf.summary.scalar(name="stylised_batch/metrics",
+                          data=tfp.stats.percentile(stylised_batch,
+                                                    50.0,
+                                                    interpolation='midpoint'),
+                            step=i + 1)
+        with config["tf_writer"].as_default():
+          tf.summary.scalar(name="loss/content_loss", data=batch_content_loss, step=i + 1)
+          tf.summary.scalar(name="loss/style_loss", data=batch_style_loss, step=i + 1)
+          tf.summary.scalar(name="loss/tv_loss", data=batch_total_variation_loss, step=i + 1)
+          tf.summary.scalar(name="learning_rate", data=lr_schedule(i + 1), step=i + 1)
 
       loss = batch_content_loss + batch_style_loss + batch_total_variation_loss
       mean_loss += loss.numpy()
@@ -245,17 +241,18 @@ def train(config) -> Model:
 
         pbar = get_pbar()
         mean_loss = 0
-        tf.summary.image("content_image",
-                         deprocess_image(content_batch,
-                                         config["img_nrows"],
-                                         config["img_ncols"]),
-                         step=i + 1,
-                         max_outputs=3)
-        tf.summary.image("stylised_image",
-                         deprocess_image(transformer.call(content_batch),
-                                         config["img_nrows"],
-                                         config["img_ncols"]),
-                         step=i + 1, max_outputs=3)
+        with config["img_writer"].as_default():
+          tf.summary.image("content_image",
+                           deprocess_image(content_batch,
+                                           config["img_nrows"],
+                                           config["img_ncols"]),
+                           step=i + 1,
+                           max_outputs=3)
+          tf.summary.image("stylised_image",
+                           deprocess_image(transformer.call(content_batch),
+                                           config["img_nrows"],
+                                           config["img_ncols"]),
+                           step=i + 1, max_outputs=3)
         start_time = time()
 
       if lowest_loss - mean_loss if mean_loss > 0 else np.Inf >= config["min_improvement"]:
@@ -268,7 +265,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > 10000:
+      if i > 41392:
         break
 
     return transformer
@@ -276,8 +273,8 @@ def train(config) -> Model:
 
 if __name__ == '__main__':
   # Set seeds for random generators
-  np.random.seed(42)
-  tf.random.set_seed(42)
+  # np.random.seed(42)
+  # tf.random.set_seed(42)
 
   # Enable XLA
   tf.config.optimizer.set_jit(True)
@@ -294,21 +291,21 @@ if __name__ == '__main__':
                       type=float,
                       help="Weight factor for content loss. Higher values mean "
                            "more of the original image will be kept.",
-                      default=2e-1)
+                      default=5e0)
   parser.add_argument("--style_weight",
                       type=float,
                       help="Weight factor for style loss. Higher values mean "
                            "more of the style image will be kept.",
-                      default=2e2)
+                      default=2e5)
   parser.add_argument("--tv_weight",
                       type=float,
                       help="Weight factor for total variation loss. Affects "
                            "sharpness vs smoothness of the resulting image.",
-                      default=1e-7)  # 1e9)
+                      default=1e-6)  # 1e9)
   parser.add_argument("--patience",
                       type=int,
                       help="Number of steps without any improvement.",
-                      default=1050)
+                      default=3050)
   parser.add_argument("--dataset_path",
                       type=str,
                       help="Path to MS COCO dataset",
@@ -346,27 +343,27 @@ if __name__ == '__main__':
   width, height = get_img_dimensions(args.style_img_name)
 
   # TODO: 👇 Make this a script parameter
-  img_nrows = 500
+  img_nrows = 300
 
   if args.fixed_imgs:
     dataset = image_dataset_from_directory(
-      directory=args.dataset_path,
+      directory=join(args.dataset_path, "mscoco", "datasets"),
       labels=None,
       label_mode=None,
       color_mode="rgb",
-      batch_size=2,
+      batch_size=4,
       image_size=(img_nrows, img_nrows),
       shuffle=False,
-
     )
   else:
+    # 0345 604 5629
     dataset = ImageDataGenerator(
       rotation_range=20,
       horizontal_flip=True,
       vertical_flip=False,
       fill_mode="reflect",
-      width_shift_range=0.05,
-      height_shift_range=0.05,
+      width_shift_range=0.1,
+      height_shift_range=100.1,
       # brightness_range=(-0.002, 0.002),
       zoom_range=0.15,
       shear_range=0.15
@@ -375,13 +372,17 @@ if __name__ == '__main__':
       class_mode=None,
       target_size=(img_nrows, img_nrows),
       shuffle=False,
-      batch_size=2,
+      batch_size=4,
       color_mode="rgb"
     )
 
-  logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
-  # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
-  writer = tf.summary.create_file_writer(logdir)
+  logdir = "logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+  writer = tf.summary.create_file_writer(logdir + "/loss")
+  img_writer = tf.summary.create_file_writer(logdir + "/images")
+  metric_writers = {}
+  for metric in ["max", "min", "median", "mean"]:
+    metric_logdir = f"{logdir}/metrics/{metric}"
+    metric_writers[metric] = tf.summary.create_file_writer(metric_logdir)
 
   config = dict(
     style_img_path=args.style_img_name,
@@ -399,22 +400,26 @@ if __name__ == '__main__':
 
     patience=args.patience,  # Steps without improvement
     min_improvement=0.1,
-    initial_learning_rate=0.0001,
-    optimiser="adam",
+    initial_learning_rate=.001,
+    optimiser="sgd",
 
     # List of layers to use for the style loss.
     style_layer_names=[
-      'block1_conv1', 'block2_conv1',
-      'block3_conv1', 'block4_conv1',
+      'block1_conv1',
+      'block2_conv1',
+      'block3_conv1',
+      'block4_conv1',
       'block5_conv1'
     ],
 
     # List of layers to use for the content loss.
-    content_layer_names=["block5_conv2",
-                         # "block5_conv3"
-                         ],
+    content_layer_names=[
+      "block5_conv2"
+    ],
     dataset=dataset,
     tf_writer=writer,
+    metric_writers=metric_writers,
+    img_writer=img_writer,
 
     # Data augmentation
     augment_content=args.fixed_imgs
