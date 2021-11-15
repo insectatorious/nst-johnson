@@ -111,18 +111,18 @@ def train(config) -> Model:
 
   with strategy.scope():
 
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+      initial_learning_rate=config["initial_learning_rate"],
+      decay_steps=1000,
+      decay_rate=0.9,
+      staircase=False
+    )
     if config["optimiser"] == "adam":
-      optimiser = Adam(learning_rate=config["initial_learning_rate"],
+      optimiser = Adam(learning_rate=lr_schedule,
                        beta_1=0.7,
                        beta_2=0.7,
-                       clipnorm=1.7)
+                       clipnorm=5.0)
     else:
-      lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=config["initial_learning_rate"],
-        decay_steps=1000,
-        decay_rate=0.9,
-        staircase=False
-      )
       optimiser = SGD(learning_rate=lr_schedule,
                       momentum=0.5,
                       nesterov=True,
