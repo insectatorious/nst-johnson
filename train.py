@@ -16,7 +16,7 @@ from tensorflow.keras.optimizers import Optimizer, Adam, SGD
 from tensorflow.keras.utils import image_dataset_from_directory
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-from models.perceptual_loss import get_model
+from models.perceptual_loss import get_model, PerceptualModelType
 from utils.utils import (
   get_img_dimensions,
   get_training_strategy,
@@ -137,7 +137,8 @@ def train(config) -> Model:
     perceptual_loss: Model = get_model(config["style_layer_names"],
                                        config["content_layer_names"],
                                        img_ncols=config["img_ncols"],
-                                       img_nrows=config["img_nrows"])
+                                       img_nrows=config["img_nrows"],
+                                       model_type=PerceptualModelType.VGG_16)
 
     # transformer.build(input_shape=(None, None, None, 3))
     # transformer.compile(optimizer=optimiser)
@@ -151,7 +152,8 @@ def train(config) -> Model:
 
     style_image = preprocess_image(image_path=config["style_img_path"],
                                    img_nrows=config["img_nrows"],
-                                   img_ncols=config["img_ncols"])
+                                   img_ncols=config["img_ncols"],
+                                   model_type=PerceptualModelType.VGG_16)
     with config["img_writer"].as_default():
       tf.summary.image("style_image",
                        deprocess_image(style_image,
@@ -176,7 +178,8 @@ def train(config) -> Model:
 
       content_batch = preprocess_img_tensor(batch,
                                             config["img_nrows"],
-                                            config["img_ncols"])
+                                            config["img_ncols"],
+                                            PerceptualModelType.VGG_16)
       # loss = distributed_train_step(strategy,
       #                               transformer,
       #                               perceptual_loss,
@@ -405,16 +408,23 @@ if __name__ == '__main__':
 
     # List of layers to use for the style loss.
     style_layer_names=[
-      'block1_conv1',
-      'block2_conv1',
-      'block3_conv1',
-      'block4_conv1',
-      'block5_conv1'
+      'block1_conv2',
+      'block2_conv2',
+      'block3_conv3',
+      'block4_conv3'
     ],
+    # style_layer_names=[
+    #   'block1_conv1',
+    #   'block2_conv1',
+    #   'block3_conv1',
+    #   'block4_conv1',
+    #   'block5_conv1'
+    # ],
 
     # List of layers to use for the content loss.
     content_layer_names=[
-      "block5_conv2"
+      # "block1_conv2",
+      "block2_conv2"
     ],
     dataset=dataset,
     tf_writer=writer,
