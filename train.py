@@ -279,7 +279,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > 55188: #41392:
+      if i > (82783 // config["batch_size"] * 2): #41392:
         break
 
     return transformer
@@ -316,6 +316,15 @@ if __name__ == '__main__':
                       help="Weight factor for total variation loss. Affects "
                            "sharpness vs smoothness of the resulting image.",
                       default=0)  # 1e9)
+  parser.add_argument("--batch_size",
+                      type=int,
+                      default=3,
+                      help="Number of images to train in one go")
+  parser.add_argument("--content_width",
+                      type=int,
+                      default=300,
+                      help="Width to resize each image in MS COCO to before "
+                           "passing through the network.")
   parser.add_argument("--patience",
                       type=int,
                       help="Number of steps without any improvement.",
@@ -357,7 +366,7 @@ if __name__ == '__main__':
   width, height = get_img_dimensions(args.style_img_name)
 
   # TODO: 👇 Make this a script parameter
-  img_nrows = 400
+  img_nrows = args.content_width
 
   if args.fixed_imgs:
     dataset = image_dataset_from_directory(
@@ -365,7 +374,7 @@ if __name__ == '__main__':
       labels=None,
       label_mode=None,
       color_mode="rgb",
-      batch_size=3,
+      batch_size=args.batch_size,
       interpolation="nearest",
       image_size=(img_nrows, img_nrows),
       shuffle=False,
@@ -387,7 +396,7 @@ if __name__ == '__main__':
       class_mode=None,
       target_size=(img_nrows, img_nrows),
       shuffle=False,
-      batch_size=3,
+      batch_size=args.batch_size,
       color_mode="rgb"
     )
 
@@ -417,6 +426,7 @@ if __name__ == '__main__':
     min_improvement=0.1,
     initial_learning_rate=.01,
     optimiser="adam",
+    batch_size=args.batch_size,
 
     # List of layers to use for the style loss.
     style_layer_names=[
