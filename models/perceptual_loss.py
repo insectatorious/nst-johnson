@@ -20,13 +20,11 @@ def get_model(style_layer_names,
     # Build a VGG19 model loaded with pre-trained ImageNet weights
     model: Model = vgg19.VGG19(weights='imagenet',
                                include_top=False,
-                               pooling="avg",
                                input_shape=(img_ncols, img_nrows, 3))
   else:
     # Build a VGG16 model loaded with pre-trained ImageNet weights
     model: Model = vgg16.VGG16(weights='imagenet',
                                include_top=False,
-                               pooling="avg",
                                input_shape=(img_ncols, img_nrows, 3))
 
   model.trainable = False
