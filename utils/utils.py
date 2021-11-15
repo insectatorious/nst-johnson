@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras, Tensor
 from tensorflow.keras.applications import vgg19, vgg16
-from tensorflow.python.keras.losses import MeanSquaredError
+from tensorflow.python.keras.losses import MeanSquaredError, MeanAbsoluteError
 from tensorflow.keras.losses import Reduction
 from tqdm import tqdm
 
@@ -123,14 +123,15 @@ def get_training_strategy(config):
 def content_loss(content_batch_feature_maps: List[Tensor],
                  stylised_batch_feature_maps: List[Tensor]) -> Tensor:
   loss = tf.zeros(shape=())
-  content_weights = (1., 1., 1.)
-  i = 0
+  content_weights = [1.0, 1.0]
+  content_weights.reverse()
   for (target_content_representation,
        current_content_representation) in zip(content_batch_feature_maps,
                                               stylised_batch_feature_maps):
-    loss += content_weights[i] * tf.reduce_sum(
-      tf.square(target_content_representation - current_content_representation))
-    i += 1
+    loss += content_weights.pop() * tf.reduce_sum(
+      tf.abs(target_content_representation - current_content_representation)
+      # tf.square(target_content_representation - current_content_representation)
+    )
 
   return loss
 
@@ -141,13 +142,16 @@ def style_loss(target_style_representation: List[Tensor],
   loss = tf.zeros(shape=())
   current_style_representation = [batch_gram_matrix(x, normalise=True)
                                   for x in stylised_batch_feature_maps]
+  # layer_weights = [0.1, 0.2, 0.2, 0.2, 0.4]
+  layer_weights = [.7, .8, .9, 1.2, 1.2]
+  layer_weights.reverse()
   for gram_gt, gram_hat in zip(target_style_representation,
                                current_style_representation):
-    loss += MeanSquaredError(reduction=Reduction.SUM)(gram_gt, gram_hat)
+    # loss += layer_weights.pop() * MeanSquaredError()(gram_gt, gram_hat)
+    loss += layer_weights.pop() * MeanAbsoluteError()(gram_gt, gram_hat)
     # S, C = gram_gt, gram_hat
-    # # print("@@@@@", gram_gt.shape)
     # size = gram_gt.shape[1] * gram_gt.shape[2]
-    # loss += tf.reduce_sum(tf.square(S - C)) / (4.0 * (channels ** 2) * (size ** 2))
+    # loss += layer_weights.pop() * tf.reduce_sum(tf.square(S - C)) / (4.0 * (channels ** 2) * (size ** 2))
 
   loss /= len(target_style_representation)
 
