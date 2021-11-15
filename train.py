@@ -129,7 +129,22 @@ def train(config) -> Model:
                       clipnorm=5.0)
 
     with config["tf_writer"].as_default():
-      tf.summary.text("Config", tf.constant(pprint.pformat(config)),
+      interesting_hparams = ("augment_content",
+                             "content_layer_names",
+                             "content_weight",
+                             "img_ncols",
+                             "img_nrows",
+                             "initial_learning_rate",
+                             "min_improvement",
+                             "optimiser",
+                             "patience",
+                             "style_img_path",
+                             "style_layer_names",
+                             "style_weight",
+                             "total_variation_weight",
+                             "tpu")
+      hparams_to_log = {k:config[k] for k in interesting_hparams}
+      tf.summary.text("Config", tf.constant(pprint.pformat(hparams_to_log)),
                       step=0,
                       description="Hyperparameters for this run")
 
