@@ -161,10 +161,6 @@ def train(config) -> Model:
     # transformer.call(tf.keras.layers.Input(shape=(config["img_nrows"], config["img_ncols"], 3)))
     transformer.summary()
 
-    # with config["tf_writer"].as_default():
-    #   tf.summary.graph(transformer.get_g)
-    # perceptual_loss.summary()
-
     style_image = preprocess_image(image_path=config["style_img_path"],
                                    img_nrows=config["img_nrows"],
                                    img_ncols=config["img_ncols"],
