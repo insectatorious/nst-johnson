@@ -2,7 +2,7 @@ import os
 import logging
 import argparse
 import zipfile
-from os.path import join, dirname
+from os.path import join, dirname, abspath
 
 from tensorflow.keras.utils import get_file
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
   parser.add_argument("--dataset_path", "-p",
                       type=str,
                       help="Path to store MS COCO dataset (~40GB).",
-                      default=join(dirname(__file__), "data"))
+                      default=join(abspath(join(os.getcwd(), os.pardir)), "data"))
   args = parser.parse_args()
 
   # Step 1: Download the resource to the local filesystem

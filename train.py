@@ -323,7 +323,7 @@ if __name__ == '__main__':
   parser.add_argument("--dataset_path",
                       type=str,
                       help="Path to MS COCO dataset",
-                      default=join(abspath(join(getcwd(), pardir)), "data"))
+                      default=join(dirname(__file__), "data"))
   parser.add_argument("--fixed_imgs",
                       action="store_true",
                       help="If True (default: False) then augment content images")
