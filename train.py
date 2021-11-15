@@ -279,7 +279,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > 41392:
+      if i > 55188: #41392:
         break
 
     return transformer
@@ -305,17 +305,17 @@ if __name__ == '__main__':
                       type=float,
                       help="Weight factor for content loss. Higher values mean "
                            "more of the original image will be kept.",
-                      default=5e0)
+                      default=1e-7)
   parser.add_argument("--style_weight",
                       type=float,
                       help="Weight factor for style loss. Higher values mean "
                            "more of the style image will be kept.",
-                      default=2e5)
+                      default=2e0)
   parser.add_argument("--tv_weight",
                       type=float,
                       help="Weight factor for total variation loss. Affects "
                            "sharpness vs smoothness of the resulting image.",
-                      default=1e-6)  # 1e9)
+                      default=0)  # 1e9)
   parser.add_argument("--patience",
                       type=int,
                       help="Number of steps without any improvement.",
@@ -357,7 +357,7 @@ if __name__ == '__main__':
   width, height = get_img_dimensions(args.style_img_name)
 
   # TODO: 👇 Make this a script parameter
-  img_nrows = 300
+  img_nrows = 400
 
   if args.fixed_imgs:
     dataset = image_dataset_from_directory(
@@ -365,10 +365,11 @@ if __name__ == '__main__':
       labels=None,
       label_mode=None,
       color_mode="rgb",
-      batch_size=4,
+      batch_size=3,
+      interpolation="nearest",
       image_size=(img_nrows, img_nrows),
       shuffle=False,
-    )
+    ).repeat()
   else:
     # 0345 604 5629
     dataset = ImageDataGenerator(
@@ -386,7 +387,7 @@ if __name__ == '__main__':
       class_mode=None,
       target_size=(img_nrows, img_nrows),
       shuffle=False,
-      batch_size=4,
+      batch_size=3,
       color_mode="rgb"
     )
 
@@ -414,8 +415,8 @@ if __name__ == '__main__':
 
     patience=args.patience,  # Steps without improvement
     min_improvement=0.1,
-    initial_learning_rate=.001,
-    optimiser="sgd",
+    initial_learning_rate=.01,
+    optimiser="adam",
 
     # List of layers to use for the style loss.
     style_layer_names=[
