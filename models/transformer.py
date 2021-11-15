@@ -231,7 +231,7 @@ class Transformer(tf.keras.Model):
 def get_transformer(num_of_channels=None,
                     kernel_sizes=None,
                     stride_sizes=None,
-                    dropout_rate: int = 0.2) -> tf.keras.Model:
+                    dropout_rate: int = 0.1) -> tf.keras.Model:
   if num_of_channels is None:
     num_of_channels = [3, 32, 64, 128]
   if kernel_sizes is None:
