@@ -289,6 +289,7 @@ def get_transformer(num_of_channels=None,
              kernel_size=kernel_sizes[-3],
              strides=stride_sizes[-3],
              padding="same")(x)
-  x = SpatialDropout2D(dropout_rate)(x)
+  # x = SpatialDropout2D(dropout_rate)(x)
+  # x = tf.nn.tanh(x) * 150.
 
   return tf.keras.Model(input_layer, x, name="style_model")
