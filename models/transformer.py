@@ -8,6 +8,7 @@ from tensorflow.keras.layers import (
   BatchNormalization,
   ZeroPadding2D,
   SpatialDropout2D,
+  ReLU,
   LeakyReLU,
   Add
 )
@@ -237,41 +238,46 @@ def get_transformer(num_of_channels=None,
     kernel_sizes = [9, 3, 3]
   if stride_sizes is None:
     stride_sizes = [1, 2, 2]
-
+  relu = ReLU()
   input_layer = tf.keras.Input(shape=(None, None, 3), name="input_img")
-  x = ZeroPadding2D(2)(input_layer)
+  x = tf.pad(input_layer, [[0, 0], [1, 1], [1, 1], [0, 0]], "SYMMETRIC")
+  # x = ZeroPadding2D(2)(input_layer)
   x = Conv2D(num_of_channels[1],
              kernel_size=kernel_sizes[0],
              padding="same",
              strides=stride_sizes[0])(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
-  x = LeakyReLU()(x)
+  # x = LeakyReLU()(x)
+  x = relu(x)
   x = Conv2D(num_of_channels[2],
              kernel_size=kernel_sizes[1],
              padding="same",
              strides=stride_sizes[1])(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
-  x = LeakyReLU()(x)
+  # x = LeakyReLU()(x)
+  x = relu(x)
   x = Conv2D(num_of_channels[3],
              kernel_size=kernel_sizes[2],
              padding="valid",
              strides=stride_sizes[2])(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
-  x = LeakyReLU()(x)
+  # x = LeakyReLU()(x)
+  x = relu(x)
 
   residual_block_filters = 128
   for _ in range(5):
-    x = ResidualBlock(residual_block_filters, "instance", True)(x)
+    x = ResidualBlock(residual_block_filters, "instance", False)(x)
     x = SpatialDropout2D(dropout_rate)(x)
 
   x = UpSampling2D(size=stride_sizes[-1],
                    interpolation="nearest")(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
-  x = LeakyReLU()(x)
+  # x = LeakyReLU()(x)
+  x = relu(x)
   x = Conv2D(num_of_channels[-2],
              kernel_size=kernel_sizes[-1],
              padding="same")(x)
@@ -280,7 +286,8 @@ def get_transformer(num_of_channels=None,
                    interpolation="nearest")(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
-  x = LeakyReLU()(x)
+  # x = LeakyReLU()(x)
+  x = relu(x)
   x = Conv2D(num_of_channels[-3],
              kernel_size=kernel_sizes[-2],
              padding="same")(x)
