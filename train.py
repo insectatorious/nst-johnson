@@ -281,7 +281,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > (82783 // config["batch_size"] * config["batch_size"]): #41392:
+      if i > (82783 // config["batch_size"] * config["epochs"]): #41392:
         break
 
     return transformer
