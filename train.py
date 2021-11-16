@@ -137,6 +137,8 @@ def train(config) -> Model:
                              "initial_learning_rate",
                              "min_improvement",
                              "optimiser",
+                             "batch_size",
+                             "epochs",
                              "patience",
                              "style_img_path",
                              "style_layer_names",
@@ -279,7 +281,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > (82783 // config["batch_size"] * 2): #41392:
+      if i > (82783 // config["batch_size"] * config["batch_size"]): #41392:
         break
 
     return transformer
@@ -325,6 +327,11 @@ if __name__ == '__main__':
                       default=300,
                       help="Width to resize each image in MS COCO to before "
                            "passing through the network.")
+  parser.add_argument("--num_of_epochs",
+                      type=int,
+                      default=2,
+                      help="Number of epochs (early stopping can reult in "
+                           "less than this)")
   parser.add_argument("--patience",
                       type=int,
                       help="Number of steps without any improvement.",
@@ -426,6 +433,7 @@ if __name__ == '__main__':
     min_improvement=0.1,
     initial_learning_rate=.01,
     optimiser="adam",
+    epochs=args.num_of_epochs,
     batch_size=args.batch_size,
 
     # List of layers to use for the style loss.
