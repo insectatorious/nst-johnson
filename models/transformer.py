@@ -238,7 +238,7 @@ def get_transformer(num_of_channels=None,
     kernel_sizes = [9, 3, 3]
   if stride_sizes is None:
     stride_sizes = [1, 2, 2]
-  relu = ReLU()
+  relu = LeakyReLU()
   input_layer = tf.keras.Input(shape=(None, None, 3), name="input_img")
   x = tf.pad(input_layer, [[0, 0], [1, 1], [1, 1], [0, 0]], "SYMMETRIC")
   # x = ZeroPadding2D(2)(input_layer)
