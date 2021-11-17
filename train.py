@@ -241,6 +241,11 @@ def train(config) -> Model:
                                                     interpolation='midpoint'),
                             step=i + 1)
         with config["tf_writer"].as_default():
+          tf.summary.scalar(name="loss/total",
+                            data=batch_style_loss +
+                                 batch_total_variation_loss +
+                                 batch_content_loss,
+                            step=i + 1)
           tf.summary.scalar(name="loss/content_loss", data=batch_content_loss, step=i + 1)
           tf.summary.scalar(name="loss/style_loss", data=batch_style_loss, step=i + 1)
           tf.summary.scalar(name="loss/tv_loss", data=batch_total_variation_loss, step=i + 1)
