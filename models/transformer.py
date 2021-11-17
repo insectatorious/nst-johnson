@@ -85,7 +85,8 @@ class ResidualBlock(tf.keras.layers.Layer):
 def get_transformer(num_of_channels=None,
                     kernel_sizes=None,
                     stride_sizes=None,
-                    dropout_rate: int = 0.1) -> tf.keras.Model:
+                    pad_inputs: bool = True,
+                    dropout_rate: float = 0.1) -> tf.keras.Model:
   if num_of_channels is None:
     num_of_channels = [3, 32, 64, 128]
   if kernel_sizes is None:
@@ -94,8 +95,10 @@ def get_transformer(num_of_channels=None,
     stride_sizes = [1, 2, 2]
   relu = LeakyReLU()
   input_layer = tf.keras.Input(shape=(None, None, 3), name="input_img")
-  x = tf.pad(input_layer, [[0, 0], [1, 1], [1, 1], [0, 0]], "SYMMETRIC")
-  # x = ZeroPadding2D(2)(input_layer)
+  if pad_inputs:
+    x = tf.pad(input_layer, [[0, 0], [3, 3], [3, 3], [0, 0]], "SYMMETRIC")
+  else:
+    x = input_layer
   x = Conv2D(num_of_channels[1],
              kernel_size=kernel_sizes[0],
              padding="same",
@@ -106,7 +109,7 @@ def get_transformer(num_of_channels=None,
   x = relu(x)
   x = Conv2D(num_of_channels[2],
              kernel_size=kernel_sizes[1],
-             padding="same",
+             padding="valid" if pad_inputs else "same",
              strides=stride_sizes[1])(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
@@ -114,7 +117,7 @@ def get_transformer(num_of_channels=None,
   x = relu(x)
   x = Conv2D(num_of_channels[3],
              kernel_size=kernel_sizes[2],
-             padding="valid",
+             padding="valid" if pad_inputs else "same",
              strides=stride_sizes[2])(x)
   x = SpatialDropout2D(dropout_rate)(x)
   x = InstanceNormalization()(x)
