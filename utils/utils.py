@@ -143,7 +143,7 @@ def style_loss(target_style_representation: List[Tensor],
   current_style_representation = [batch_gram_matrix(x, normalise=True)
                                   for x in stylised_batch_feature_maps]
   # layer_weights = [0.1, 0.2, 0.2, 0.2, 0.4]
-  layer_weights = [.7, .8, .9, 1.2, 1.2]
+  layer_weights = [1., 1., 1.2, 1.3, 1.4]
   layer_weights.reverse()
   for gram_gt, gram_hat in zip(target_style_representation,
                                current_style_representation):
