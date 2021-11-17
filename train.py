@@ -181,6 +181,7 @@ def train(config) -> Model:
                                    if x in config["style_layer_names"]]
 
     mean_loss = 0
+    last_durations = []
     lowest_loss = np.Inf
     iterations_since_improvement = 0
     start_time = time()
@@ -251,10 +252,19 @@ def train(config) -> Model:
 
       if i % 100 == 0:
         duration = time() - start_time
+        last_durations.append(duration)
         pbar.close()
-        logging.info(f"Iteration {i:06d}: loss={mean_loss:,.2f} @ "
+        logging.info(f"Iteration {i:06d}"
+                     f"[{i / config['total_steps'] * 100.:05.2f}%]: "
+                     f"loss={mean_loss:,.2f} @ "
                      f"{duration / 100.:,.4f} secs per iter")
-
+        if i % 1000 == 0:
+          avg_duration_per_step = np.mean(last_durations) / 100.
+          steps_left = config['total_steps'] - i
+          time_left_in_secs = steps_left * avg_duration_per_step
+          logging.info(f"ETA for the remaining {steps_left:,d} steps: "
+                       f"{time_left_in_secs / 60.:.2f} minutes")
+          last_durations = []
         pbar = get_pbar()
         mean_loss = 0
         with config["img_writer"].as_default():
@@ -281,7 +291,7 @@ def train(config) -> Model:
         logging.info(f"Patience of {config['patience']} steps exhausted. Terminating.")
         break
 
-      if i > (82783 // config["batch_size"] * config["epochs"]): #41392:
+      if i > config["total_steps"]:
         break
 
     return transformer
@@ -326,11 +336,11 @@ if __name__ == '__main__':
                       type=int,
                       default=300,
                       help="Width to resize each image in MS COCO to before "
-                           "passing through the network.")
+                           "passing through the network")
   parser.add_argument("--num_of_epochs",
                       type=int,
                       default=2,
-                      help="Number of epochs (early stopping can reult in "
+                      help="Number of epochs (early stopping can result in "
                            "less than this)")
   parser.add_argument("--patience",
                       type=int,
@@ -432,9 +442,10 @@ if __name__ == '__main__':
     patience=args.patience,  # Steps without improvement
     min_improvement=0.1,
     initial_learning_rate=.01,
-    optimiser="adam",
+    optimiser="sgd",
     epochs=args.num_of_epochs,
     batch_size=args.batch_size,
+    total_steps=82783 // args.batch_size * args.num_of_epochs,
 
     # List of layers to use for the style loss.
     style_layer_names=[
@@ -466,6 +477,7 @@ if __name__ == '__main__':
 
   )
 
+  logging.info(f"Training for {config['total_steps']} steps")
   transformer: Model = train(config)
   transformer.save(join(model_root_path, model_name))
   logging.info(f"Saved {model_name} at {model_root_path}")
