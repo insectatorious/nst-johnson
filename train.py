@@ -150,7 +150,7 @@ def train(config) -> Model:
                       step=0,
                       description="Hyperparameters for this run")
 
-    transformer: Model = get_transformer()
+    transformer: Model = get_transformer(pad_inputs=False, dropout_rate=0.25)
     perceptual_loss: Model = get_model(config["style_layer_names"],
                                        config["content_layer_names"],
                                        img_ncols=config["img_ncols"],
