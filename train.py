@@ -2,7 +2,7 @@ import pprint
 import argparse
 import logging
 from argparse import Namespace
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import makedirs, getcwd, pardir
 from os.path import join, dirname, exists, isfile, basename, abspath
 from time import time
@@ -181,6 +181,7 @@ def train(config) -> Model:
                                    if x in config["style_layer_names"]]
 
     mean_loss = 0
+    last_mean_loss = mean_loss
     last_durations = []
     lowest_loss = np.Inf
     iterations_since_improvement = 0
@@ -259,17 +260,30 @@ def train(config) -> Model:
         duration = time() - start_time
         last_durations.append(duration)
         pbar.close()
-        logging.info(f"Iteration {i:06d}"
+        direction = "\u2191" if last_mean_loss <= mean_loss else "\u2193"
+        logging.info(f"Iteration {i:05d}"
                      f"[{i / config['total_steps'] * 100.:05.2f}%]: "
-                     f"loss={mean_loss:,.2f} @ "
-                     f"{duration / 100.:,.4f} secs per iter")
+                     f"loss={mean_loss:,.2f}"
+                     # f"{'*' if mean_loss < lowest_loss else ''} "
+                     f"[{direction} {np.abs(last_mean_loss - mean_loss):,.2f}]"
+                     f" @ {duration / 100.:,.4f} secs per iter")
+        last_mean_loss = mean_loss
         if i % 1000 == 0:
           avg_duration_per_step = np.mean(last_durations) / 100.
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
+          eta = datetime.now() + timedelta(seconds=time_left_in_secs)
           logging.info(f"ETA for the remaining {steps_left:,d} steps: "
-                       f"{time_left_in_secs / 60.:.2f} minutes")
+                       f"{time_left_in_secs / 60.:.2f} minutes "
+                       f"({eta.strftime('%Y-%m-%d %H:%M')})")
           last_durations = []
+          if i / config["total_steps"] > .5 and batch_style_loss - batch_content_loss > 100.:
+            logging.warning(f"'style_weight' ({config['style_weight']}) might be too high compared "
+                            f"to content_weight({config['content_weight']}) as the "
+                            f"loss between the two is still quite large. "
+                            f"Consider reducing the 'style_weight' or increasing "
+                            f"the 'content_weight'.")
+
         pbar = get_pbar()
         mean_loss = 0
         with config["img_writer"].as_default():
