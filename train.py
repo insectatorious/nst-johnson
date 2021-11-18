@@ -260,11 +260,10 @@ def train(config) -> Model:
         duration = time() - start_time
         last_durations.append(duration)
         pbar.close()
-        direction = "\u2191" if last_mean_loss <= mean_loss else "\u2193"
+        direction = "\u2197" if last_mean_loss <= mean_loss else "\u2198"
         logging.info(f"Iteration {i:05d}"
                      f"[{i / config['total_steps'] * 100.:05.2f}%]: "
                      f"loss={mean_loss:,.2f}"
-                     # f"{'*' if mean_loss < lowest_loss else ''} "
                      f"[{direction} {np.abs(last_mean_loss - mean_loss):,.2f}]"
                      f" @ {duration / 100.:,.4f} secs per iter")
         last_mean_loss = mean_loss
@@ -277,10 +276,12 @@ def train(config) -> Model:
                        f"{time_left_in_secs / 60.:.2f} minutes "
                        f"({eta.strftime('%Y-%m-%d %H:%M')})")
           last_durations = []
-          if i / config["total_steps"] > .5 and batch_style_loss - batch_content_loss > 100.:
+          if i / config["total_steps"] > .5 and batch_style_loss - batch_content_loss > 1000.:
             logging.warning(f"'style_weight' ({config['style_weight']}) might be too high compared "
                             f"to content_weight({config['content_weight']}) as the "
-                            f"loss between the two is still quite large. "
+                            f"loss between the two is still quite large "
+                            f"(style_loss: {batch_style_loss:,.2f} "
+                            f"content_loss: {batch_content_loss:,.2f}). "
                             f"Consider reducing the 'style_weight' or increasing "
                             f"the 'content_weight'.")
 
