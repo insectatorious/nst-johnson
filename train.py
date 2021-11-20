@@ -261,14 +261,14 @@ def train(config) -> Model:
         last_durations.append(duration)
         pbar.close()
         direction = "\u2197" if last_mean_loss <= mean_loss else "\u2198"
-        logging.info(f"Iteration {i:05d}"
+        logging.info(f"Step {i:05d}"
                      f"[{i / config['total_steps'] * 100.:05.2f}%]: "
                      f"loss={mean_loss:,.2f}"
                      f"[{direction} {np.abs(last_mean_loss - mean_loss):,.2f}]"
-                     f" @ {duration / 100.:,.4f} secs/iteration")
+                     f" @ {duration / 100.:,.4f} secs/step")
         last_mean_loss = mean_loss
         if i % 1000 == 0 and i > 0:
-          avg_duration_per_step = np.mean(last_durations[:-2000]) / 100.
+          avg_duration_per_step = np.mean(last_durations[-2000:]) / 100.
           variation_per_step = np.var(np.asarray(last_durations) / 100.)
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
