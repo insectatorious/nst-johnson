@@ -161,7 +161,7 @@ def train(config) -> Model:
     # transformer.compile(optimizer=optimiser)
     # transformer.build(input_shape=(None, config["img_nrows"], config["img_ncols"], 3))
     # transformer.call(tf.keras.layers.Input(shape=(config["img_nrows"], config["img_ncols"], 3)))
-    transformer.summary()
+    # transformer.summary()
 
     style_image = preprocess_image(image_path=config["style_img_path"],
                                    img_nrows=config["img_nrows"],
@@ -265,16 +265,20 @@ def train(config) -> Model:
                      f"[{i / config['total_steps'] * 100.:05.2f}%]: "
                      f"loss={mean_loss:,.2f}"
                      f"[{direction} {np.abs(last_mean_loss - mean_loss):,.2f}]"
-                     f" @ {duration / 100.:,.4f} secs per iter")
+                     f" @ {duration / 100.:,.4f} secs/iteration")
         last_mean_loss = mean_loss
         if i % 1000 == 0 and i > 0:
           avg_duration_per_step = np.mean(last_durations) / 100.
+          variation_per_step = np.var(np.asarray(last_durations) / 100.)
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
+          time_left_in_secs_variation = steps_left * (avg_duration_per_step + variation_per_step)
+          tolerance_in_secs = np.abs(time_left_in_secs_variation - time_left_in_secs)
           eta = datetime.now() + timedelta(seconds=time_left_in_secs)
           logging.info(f"ETA for the remaining {steps_left:,d} steps: "
                        f"{time_left_in_secs / 60.:.2f} minutes "
-                       f"({eta.strftime('%Y-%m-%d %H:%M')})")
+                       f"({eta.strftime('%Y-%m-%d %H:%M')} "
+                       f"\u00B1 {tolerance_in_secs / 60.:.1f}mins)")
           last_durations = []
           if i / config["total_steps"] > .5 and batch_style_loss - batch_content_loss > 1000.:
             logging.warning(f"'style_weight' ({config['style_weight']}) might be too high compared "
@@ -283,7 +287,8 @@ def train(config) -> Model:
                             f"(style_loss: {batch_style_loss:,.2f} "
                             f"content_loss: {batch_content_loss:,.2f}). "
                             f"Consider reducing the 'style_weight' or increasing "
-                            f"the 'content_weight'.")
+                            f"the 'content_weight'. Alternatively, train for more "
+                            f"epochs if the loss is decreasing.")
 
         pbar = get_pbar()
         mean_loss = 0
