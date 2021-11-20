@@ -268,7 +268,7 @@ def train(config) -> Model:
                      f" @ {duration / 100.:,.4f} secs/iteration")
         last_mean_loss = mean_loss
         if i % 1000 == 0 and i > 0:
-          avg_duration_per_step = np.mean(last_durations) / 100.
+          avg_duration_per_step = np.mean(last_durations[:-2000]) / 100.
           variation_per_step = np.var(np.asarray(last_durations) / 100.)
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
@@ -279,7 +279,7 @@ def train(config) -> Model:
                        f"{time_left_in_secs / 60.:.2f} minutes "
                        f"({eta.strftime('%Y-%m-%d %H:%M')} "
                        f"\u00B1 {tolerance_in_secs / 60.:.1f}mins)")
-          last_durations = []
+          # last_durations = []
           if i / config["total_steps"] > .5 and batch_style_loss - batch_content_loss > 1000.:
             logging.warning(f"'style_weight' ({config['style_weight']}) might be too high compared "
                             f"to content_weight({config['content_weight']}) as the "
