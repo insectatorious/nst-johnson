@@ -267,7 +267,7 @@ def train(config) -> Model:
                      f"[{direction} {np.abs(last_mean_loss - mean_loss):,.2f}]"
                      f" @ {duration / 100.:,.4f} secs per iter")
         last_mean_loss = mean_loss
-        if i % 1000 == 0:
+        if i % 1000 == 0 and i > 0:
           avg_duration_per_step = np.mean(last_durations) / 100.
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
