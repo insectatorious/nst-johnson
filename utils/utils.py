@@ -129,8 +129,8 @@ def content_loss(content_batch_feature_maps: List[Tensor],
        current_content_representation) in zip(content_batch_feature_maps,
                                               stylised_batch_feature_maps):
     loss += content_weights.pop() * tf.reduce_sum(
-      tf.abs(target_content_representation - current_content_representation)
-      # tf.square(target_content_representation - current_content_representation)
+      # tf.abs(target_content_representation - current_content_representation)
+      tf.square(target_content_representation - current_content_representation)
     )
 
   return loss
@@ -147,8 +147,8 @@ def style_loss(target_style_representation: List[Tensor],
   layer_weights.reverse()
   for gram_gt, gram_hat in zip(target_style_representation,
                                current_style_representation):
-    # loss += layer_weights.pop() * MeanSquaredError()(gram_gt, gram_hat)
-    loss += layer_weights.pop() * MeanAbsoluteError()(gram_gt, gram_hat)
+    loss += layer_weights.pop() * MeanSquaredError()(gram_gt, gram_hat)
+    # loss += layer_weights.pop() * MeanAbsoluteError()(gram_gt, gram_hat)
     # S, C = gram_gt, gram_hat
     # size = gram_gt.shape[1] * gram_gt.shape[2]
     # loss += layer_weights.pop() * tf.reduce_sum(tf.square(S - C)) / (4.0 * (channels ** 2) * (size ** 2))
