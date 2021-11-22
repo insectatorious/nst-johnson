@@ -492,8 +492,8 @@ if __name__ == '__main__':
     content_layer_names=[
       # "block1_conv2"
       # "block2_conv2",
-      "block3_conv3",
-      # "block4_conv3"
+      # "block3_conv3",
+      "block4_conv3"
     ],
     dataset=dataset,
     tf_writer=writer,
