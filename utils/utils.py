@@ -123,7 +123,7 @@ def get_training_strategy(config):
 def content_loss(content_batch_feature_maps: List[Tensor],
                  stylised_batch_feature_maps: List[Tensor]) -> Tensor:
   loss = tf.zeros(shape=())
-  content_weights = [1.0, 1.0]
+  content_weights = [1.0, 1.0, 1.0, 1.0]
   content_weights.reverse()
   for (target_content_representation,
        current_content_representation) in zip(content_batch_feature_maps,
