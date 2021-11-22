@@ -467,7 +467,7 @@ if __name__ == '__main__':
     patience=args.patience,  # Steps without improvement
     min_improvement=0.1,
     initial_learning_rate=.01,
-    optimiser="sgd",
+    optimiser="adam",
     epochs=args.num_of_epochs,
     batch_size=args.batch_size,
     total_steps=82783 // args.batch_size * args.num_of_epochs,
