@@ -489,8 +489,10 @@ if __name__ == '__main__':
 
     # List of layers to use for the content loss.
     content_layer_names=[
-      # "block1_conv2",
-      "block3_conv3"
+      # "block1_conv2"
+      # "block2_conv2",
+      "block3_conv3",
+      # "block4_conv3"
     ],
     dataset=dataset,
     tf_writer=writer,
