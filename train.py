@@ -477,7 +477,8 @@ if __name__ == '__main__':
       'block1_conv2',
       'block2_conv2',
       'block3_conv3',
-      'block4_conv3'
+      'block4_conv3',
+      'block5_conv3'
     ],
     # style_layer_names=[
     #   'block1_conv1',
