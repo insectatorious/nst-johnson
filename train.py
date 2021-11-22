@@ -269,7 +269,7 @@ def train(config) -> Model:
         last_mean_loss = mean_loss
         if i % 1000 == 0 and i > 0:
           avg_duration_per_step = np.mean(last_durations[-2000:]) / 100.
-          variation_per_step = np.var(np.asarray(last_durations) / 100.)
+          variation_per_step = np.std(np.asarray(last_durations) / 100., ddof=1)
           steps_left = config['total_steps'] - i
           time_left_in_secs = steps_left * avg_duration_per_step
           time_left_in_secs_variation = steps_left * (avg_duration_per_step + variation_per_step)
